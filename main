@@ -1,0 +1,179 @@
+Admin Panel
+
+const express = require('express'); 
+const app = express(); const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt'); const saltRounds = 10;
+const mongoose = require('mongoose'); const jwt = require('jsonwebtoken');
+const Student = require('./models/Student'); const Task = require('./models/Task'); const SECRET_KEY = 'secret';
+
+mongoose.connect('mongodb://localhost/student-management-system', {useNewUrlParser: true, useUnifiedTopology: true});
+
+app.use(bodyParser.json());
+
+app.post('/api/login', (req, res) => { const email = req.body.email; const password = req.body.password;
+
+ Student.findOne({email: email}, (err, student) => {
+     if (err) throw err;
+     if (!student) {
+         return res.status(401).json({message: 'Authentication failed. User not found.'});
+     }
+
+     bcrypt.compare(password, student.password).then(response => {
+         if (!response) {
+             return res.status(401).json({message: 'Authentication failed. Wrong password.'});
+         }
+
+         const token = jwt.sign({_id: student._id}, SECRET_KEY, {expiresIn: '1h'});
+         res.status(200).json({message: 'Authentication successful', token: token});
+     });
+ });
+
+});
+
+app.post('/api/add-student',
+(req, res) => { const name = req.body.name; 
+const email = req.body.email; c
+onst department = req.body.department; 
+const password = req.body.password;
+ bcrypt.hash(password, saltRounds).then(hashedPassword => {
+     const newStudent = new Student({
+         name: name,
+         email: email,
+         department: department,
+         password: hashedPassword
+     });
+
+     newStudent.save().then(student => {
+         res.status(200).json({message: 'Student added successfully', student: student});
+     }).catch(err => {
+         res.status(500).json({message: 'Failed to add student', error: err});
+     });
+ });
+
+});
+
+app.post('/api/add-task', (req, res) => { const studentId = req.body.studentId; 
+const task = req.body.task;
+const dueTime = req.body.dueTime;
+ const newTask = new Task({
+     studentId: studentId,
+     task: task,
+     dueTime: dueTime,
+     status: 'pending'
+ });
+
+ newTask.save().then(task => {
+     res.status(200).json({message: 'Task added successfully', task: task});
+ }).catch(err => {
+     res.status(500).json({message: 'Failed to add task', error: err});
+ });
+});
+
+app.get('/api/tasks', (req, res) => { const studentId = req.query.studentId;
+
+ Task.find({studentId: studentId}).then(tasks => {
+     res.status(200).json({tasks: tasks});
+ }).catch(err => {
+     res.status(500).json({message: 'Failed to fetch tasks', error: err});
+ });
+});
+
+app.listen(3000, () => { console.log('Server is running on port 3000'); });
+
+
+Student Interface
+
+app.get('/api/get-tasks', (req, res) => { const studentId = req.query.studentId;
+ Task.find({studentId: studentId}).then(tasks => {
+     res.status(200).json({tasks: tasks});
+ }).catch(err => {
+     res.status(500).json({message: 'Failed to fetch tasks', error: err});
+ });
+});
+
+app.put('/api/update-task-status', (req, res) => { const taskId = req.body.taskId; 
+const newStatus = req.body.newStatus;
+ Task.findByIdAndUpdate(taskId, {status: newStatus}, {new: true}).then(task => {
+     res.status(200).json({message: 'Task status updated successfully', task: task});
+ }).catch(err => {
+     res.status(500).json({message: 'Failed to update task status', error: err});
+ });
+ Task.findByIdAndUpdate(taskId, {status: newStatus}, {new: true}).then(task => {
+     res.status(200).json({message: 'Task status updated successfully', task: task});
+ }).catch(err => {
+     res.status(500).json({message: 'Failed to update task status', error: err});
+ });
+});
+
+app.delete('/api/delete-task', (req, res) => { const taskId = req.body.taskId;
+ Task.findByIdAndDelete(taskId).then(task => {
+     res.status(200).json({message: 'Task deleted successfully', task: task});
+ }).catch(err => {
+     res.status(500).json({message: 'Failed to delete task', error: err});
+ });
+
+Teacher Interface
+
+app.get('/api/get-tasks', (req, res) => { const department = req.query.department;
+ Student.find({department: department}).then(students => {
+     let tasks = [];
+     students.forEach(student => {
+         Task.find({studentId: student._id}).then(studentTasks => {
+             tasks = tasks.concat(studentTasks);
+             if (tasks.length === students.length) {
+                 res.status(200).json({tasks: tasks});
+             }
+         }).catch(err => {
+             res.status(500).json({message: 'Failed to fetch tasks', error: err});
+         });
+     });
+ }).catch(err => {
+     res.status(500).json({message: 'Failed to fetch students', error: err});
+ });
+});
+Admin Interface
+
+app.get('/api/get-tasks', (req, res) => { Task.find().then(tasks => { res.status(200).json({tasks: tasks}); 
+}).catch(err => { res.status(500).json({message: 'Failed to fetch tasks', error: err}); }); });
+
+Mongoose Schemas
+
+const studentSchema = new mongoose.Schema({ name: String, email: String, department: String, password: String });
+
+const taskSchema = new mongoose.Schema({ studentId: mongoose.Schema.Types.ObjectId, task: String, dueTime: Date, status: String });
+
+const Student = mongoose.model('Student', studentSchema); const Task mongoose.model('Task', taskSchema);
+
+Model
+
+module.exports = Task;
+
+Deployment
+
+In order to deploy the application, you can use services like Heroku or AWS. Here's a general step-by-step guide on deploying the application:
+
+Install the Heroku CLI.
+Run heroku login and enter your Heroku credentials.
+Run heroku create <app-name> to create a new Heroku app.
+Commit your changes using git.
+Run git push heroku master to deploy the application to Heroku.
+Run heroku open to open the deployed application in your browser.
+
+
+Error Handling
+
+Error handling can be achieved by adding catch blocks to promises and by using the express.js error handling middleware. For example, you can use the following code to handle errors in your API:
+app.use(function(err, req, res, next) {
+    console.error(err.stack);
+    res.status(500).send('Something went wrong!');
+});
+
+app.use(function(req, res, next) {
+    res.status(404).send('Sorry, the requested URL was not found on this server.');
+});
+
+process.on('unhandledRejection', (reason, p) => {
+    console.error('Unhandled Rejection at:', p, 'reason:', reason);
+});
+
+
